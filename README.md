@@ -1,4 +1,4 @@
-# Tab Domain Dashboard
+# Tab Buster Dashboard
 
 Chrome extension that replaces the new tab page with a dashboard of all open tabs grouped by friendly domain cards.
 
