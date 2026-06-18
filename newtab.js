@@ -41,6 +41,7 @@
   const MASONRY_COLUMN_GAP = 14;
   const CLOSE_GROUP_LABEL = "Close group";
   const CLOSE_GROUP_CONFIRM_LABEL = "Are you sure?";
+  const DEFAULT_GROUP_MODE = "domain";
 
   function titleCaseToken(token) {
     if (!token) return "";
@@ -236,6 +237,54 @@
     });
   }
 
+  function normalizeGroupMode(mode) {
+    return mode === "window" ? "window" : DEFAULT_GROUP_MODE;
+  }
+
+  function groupTabsByWindow(tabs) {
+    const windowIds = Array.from(new Set((tabs || []).map((tab) => tab.windowId)))
+      .filter((windowId) => windowId != null)
+      .sort((a, b) => Number(a) - Number(b));
+    const windowLabels = new Map(windowIds.map((windowId, index) => [windowId, `Window ${index + 1}`]));
+    const groupsByKey = new Map();
+
+    for (const tab of tabs || []) {
+      const decoratedTab = decorateTab(tab);
+      const windowId = tab.windowId == null ? "unknown" : tab.windowId;
+      const label = windowLabels.get(windowId) || "Window";
+      const key = `window-${windowId}`;
+
+      if (!groupsByKey.has(key)) {
+        groupsByKey.set(key, {
+          key,
+          domain: label,
+          displayName: label,
+          tabs: [],
+        });
+      }
+
+      groupsByKey.get(key).tabs.push(decoratedTab);
+    }
+
+    return Array.from(groupsByKey.values()).map((group) => ({
+      ...group,
+      tabs: organizeTabsByDuplicateUrl(group.tabs),
+    })).sort((a, b) => {
+      if (b.tabs.length !== a.tabs.length) return b.tabs.length - a.tabs.length;
+      return a.displayName.localeCompare(b.displayName, undefined, { numeric: true });
+    });
+  }
+
+  function groupTabs(tabs, mode) {
+    return normalizeGroupMode(mode) === "window" ? groupTabsByWindow(tabs) : groupTabsByDomain(tabs);
+  }
+
+  function getGroupModeSummaryLabel(mode, count) {
+    const normalizedMode = normalizeGroupMode(mode);
+    if (normalizedMode === "window") return count === 1 ? "window" : "windows";
+    return count === 1 ? "domain" : "domains";
+  }
+
   function filterGroups(groups, query) {
     const needle = String(query || "").trim().toLowerCase();
     if (!needle) return groups;
@@ -249,7 +298,8 @@
         const tabs = group.tabs.filter((tab) => {
           const title = String(tab.title || "").toLowerCase();
           const url = String(tab.url || tab.pendingUrl || "").toLowerCase();
-          return groupMatches || title.includes(needle) || url.includes(needle);
+          const displayDomain = String(tab.displayDomain || "").toLowerCase();
+          return groupMatches || title.includes(needle) || url.includes(needle) || displayDomain.includes(needle);
         });
 
         return tabs.length ? { ...group, tabs } : null;
@@ -710,13 +760,17 @@
     const themeToggle = document.getElementById("themeToggle");
     const status = document.getElementById("status");
     const summary = document.getElementById("summary");
+    const groupModeInputs = Array.from(document.querySelectorAll('input[name="groupMode"]'));
 
-    if (!grid || !emptyState || !searchInput || !themeToggle || !status || !summary) return;
+    if (!grid || !emptyState || !searchInput || !themeToggle || !status || !summary || !groupModeInputs.length) return;
 
     const chromeApi = globalScope.chrome;
-    let allGroups = [];
+    let allTabs = [];
     let currentTabId = null;
     let currentTheme = normalizeTheme(globalScope.localStorage && globalScope.localStorage.getItem("tabBusterTheme"));
+    let currentGroupMode = normalizeGroupMode(
+      globalScope.localStorage && globalScope.localStorage.getItem("tabBusterGroupMode"),
+    );
 
     function setStatus(message, tone) {
       setText(status, message || "");
@@ -728,6 +782,7 @@
     }
 
     function render() {
+      const allGroups = groupTabs(allTabs, currentGroupMode);
       const filteredGroups = filterGroups(allGroups, searchInput.value);
       const visibleTabs = filteredGroups.reduce((count, group) => count + group.tabs.length, 0);
       const columnCount = getMasonryColumnCount(grid.clientWidth || globalScope.innerWidth);
@@ -738,9 +793,21 @@
       emptyState.hidden = filteredGroups.length > 0;
       setText(
         summary,
-        `${visibleTabs} ${visibleTabs === 1 ? "tab" : "tabs"} across ${filteredGroups.length} ${
-          filteredGroups.length === 1 ? "domain" : "domains"
-        }`,
+        `${visibleTabs} ${visibleTabs === 1 ? "tab" : "tabs"} across ${filteredGroups.length} ${getGroupModeSummaryLabel(
+          currentGroupMode,
+          filteredGroups.length,
+        )}`,
+      );
+    }
+
+    function applyGroupMode(mode) {
+      currentGroupMode = normalizeGroupMode(mode);
+      for (const input of groupModeInputs) {
+        input.checked = input.value === currentGroupMode;
+      }
+      grid.setAttribute(
+        "aria-label",
+        currentGroupMode === "window" ? "Tabs grouped by Chrome window" : "Tabs grouped by domain",
       );
     }
 
@@ -779,7 +846,7 @@
             isDashboardVisibleTab(tab, { currentTabId, dashboardUrl }),
           );
 
-          allGroups = groupTabsByDomain(visibleTabs);
+          allTabs = visibleTabs;
           setStatus("");
           render();
         });
@@ -850,6 +917,16 @@
     };
 
     searchInput.addEventListener("input", render);
+    for (const input of groupModeInputs) {
+      input.addEventListener("change", () => {
+        if (!input.checked) return;
+        applyGroupMode(input.value);
+        if (globalScope.localStorage) {
+          globalScope.localStorage.setItem("tabBusterGroupMode", currentGroupMode);
+        }
+        render();
+      });
+    }
     themeToggle.addEventListener("click", () => {
       applyTheme(getNextTheme(currentTheme));
       if (globalScope.localStorage) {
@@ -860,6 +937,7 @@
       globalScope.addEventListener("resize", render);
     }
     registerTabChangeListeners(chromeApi, refreshScheduler.requestRefresh);
+    applyGroupMode(currentGroupMode);
     applyTheme(currentTheme);
     refreshTabs();
   }
@@ -877,7 +955,10 @@
     getReflowOffset,
     getNextTheme,
     getShortestColumnIndex,
+    getGroupModeSummaryLabel,
+    groupTabs,
     groupTabsByDomain,
+    groupTabsByWindow,
     GROUP_CLOSE_ANIMATION_MS,
     isDashboardVisibleTab,
     normalizeTabUrl,

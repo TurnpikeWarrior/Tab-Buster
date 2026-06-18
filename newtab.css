@@ -61,7 +61,7 @@ input {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(320px, 420px) minmax(0, 1fr);
   align-items: end;
-  gap: 20px;
+  gap: 12px 20px;
   margin-bottom: 18px;
 }
 
@@ -230,6 +230,75 @@ h1 {
 
 :root[data-theme="dark"] .search-box input:focus {
   box-shadow: 0 0 0 3px rgb(85 199 167 / 18%);
+}
+
+.group-mode {
+  grid-column: 2;
+  justify-self: center;
+  display: inline-grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 3px;
+  width: min(100%, 260px);
+  margin: 0;
+  padding: 3px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface-muted);
+}
+
+.group-mode legend {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+.group-mode label {
+  min-width: 0;
+  cursor: pointer;
+}
+
+.group-mode input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.group-mode span {
+  display: grid;
+  place-items: center;
+  height: 30px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 750;
+  line-height: 1;
+  transition:
+    background 160ms ease,
+    border-color 160ms ease,
+    color 160ms ease,
+    box-shadow 160ms ease;
+}
+
+.group-mode label:hover span,
+.group-mode input:focus-visible + span {
+  color: var(--text);
+  background: var(--surface);
+}
+
+.group-mode input:checked + span {
+  border-color: rgb(31 111 91 / 24%);
+  background: var(--surface);
+  color: var(--accent);
+  box-shadow: 0 2px 8px rgb(23 32 38 / 10%);
+}
+
+:root[data-theme="dark"] .group-mode input:checked + span {
+  border-color: rgb(85 199 167 / 30%);
+  box-shadow: 0 2px 8px rgb(0 0 0 / 22%);
 }
 
 .status {
