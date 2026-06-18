@@ -36,6 +36,7 @@
 
   const TAB_CLOSE_ANIMATION_MS = 420;
   const GROUP_CLOSE_ANIMATION_MS = 520;
+  const CARD_REFLOW_ANIMATION_MS = 340;
   const MASONRY_MIN_COLUMN_WIDTH = 360;
   const MASONRY_COLUMN_GAP = 14;
   const CLOSE_GROUP_LABEL = "Close group";
@@ -278,6 +279,24 @@
     );
   }
 
+  function getReflowOffset(previousRect, nextRect) {
+    if (!previousRect || !nextRect) return null;
+
+    const x = Math.round(previousRect.left - nextRect.left);
+    const y = Math.round(previousRect.top - nextRect.top);
+    if (x === 0 && y === 0) return null;
+
+    return { x, y };
+  }
+
+  function getNextTheme(theme) {
+    return theme === "dark" ? "light" : "dark";
+  }
+
+  function normalizeTheme(theme) {
+    return theme === "dark" ? "dark" : "light";
+  }
+
   function shortUrl(url) {
     if (!url) return "";
     try {
@@ -427,6 +446,7 @@
   function createDomainCard(group, actions) {
     const card = document.createElement("section");
     card.className = "domain-card";
+    card.dataset.groupKey = group.key;
 
     const header = document.createElement("header");
     header.className = "domain-header";
@@ -529,6 +549,47 @@
     }
   }
 
+  function captureDomainCardRects(grid) {
+    const rects = new Map();
+    for (const card of grid.querySelectorAll(".domain-card[data-group-key]")) {
+      rects.set(card.dataset.groupKey, card.getBoundingClientRect());
+    }
+
+    return rects;
+  }
+
+  function shouldReduceMotion() {
+    return Boolean(
+      globalScope.matchMedia &&
+        globalScope.matchMedia("(prefers-reduced-motion: reduce)").matches,
+    );
+  }
+
+  function animateDomainCardReflow(grid, previousRects) {
+    if (!previousRects || !previousRects.size || shouldReduceMotion()) return;
+
+    const animateFrame = globalScope.requestAnimationFrame || ((callback) => globalScope.setTimeout(callback, 0));
+
+    for (const card of grid.querySelectorAll(".domain-card[data-group-key]")) {
+      const offset = getReflowOffset(previousRects.get(card.dataset.groupKey), card.getBoundingClientRect());
+      if (!offset) continue;
+
+      card.style.transition = "none";
+      card.style.transform = `translate(${offset.x}px, ${offset.y}px)`;
+      card.style.willChange = "transform";
+
+      animateFrame(() => {
+        card.style.transition = `transform ${CARD_REFLOW_ANIMATION_MS}ms cubic-bezier(0.16, 1, 0.3, 1)`;
+        card.style.transform = "translate(0, 0)";
+        globalScope.setTimeout(() => {
+          card.style.transition = "";
+          card.style.transform = "";
+          card.style.willChange = "";
+        }, CARD_REFLOW_ANIMATION_MS);
+      });
+    }
+  }
+
   function addChromeListener(event, listener) {
     if (event && event.addListener) event.addListener(listener);
   }
@@ -560,14 +621,16 @@
     const grid = document.getElementById("domainGrid");
     const emptyState = document.getElementById("emptyState");
     const searchInput = document.getElementById("searchInput");
+    const themeToggle = document.getElementById("themeToggle");
     const status = document.getElementById("status");
     const summary = document.getElementById("summary");
 
-    if (!grid || !emptyState || !searchInput || !status || !summary) return;
+    if (!grid || !emptyState || !searchInput || !themeToggle || !status || !summary) return;
 
     const chromeApi = globalScope.chrome;
     let allGroups = [];
     let currentTabId = null;
+    let currentTheme = normalizeTheme(globalScope.localStorage && globalScope.localStorage.getItem("tabBusterTheme"));
 
     function setStatus(message, tone) {
       setText(status, message || "");
@@ -582,7 +645,9 @@
       const filteredGroups = filterGroups(allGroups, searchInput.value);
       const visibleTabs = filteredGroups.reduce((count, group) => count + group.tabs.length, 0);
       const columnCount = getMasonryColumnCount(grid.clientWidth || globalScope.innerWidth);
+      const previousRects = captureDomainCardRects(grid);
       renderMasonryColumns(grid, filteredGroups, columnCount, actions);
+      animateDomainCardReflow(grid, previousRects);
 
       emptyState.hidden = filteredGroups.length > 0;
       setText(
@@ -591,6 +656,16 @@
           filteredGroups.length === 1 ? "domain" : "domains"
         }`,
       );
+    }
+
+    function applyTheme(theme) {
+      currentTheme = normalizeTheme(theme);
+      document.documentElement.dataset.theme = currentTheme;
+      themeToggle.setAttribute(
+        "aria-label",
+        currentTheme === "dark" ? "Switch to light mode" : "Switch to dark mode",
+      );
+      themeToggle.title = currentTheme === "dark" ? "Switch to light mode" : "Switch to dark mode";
     }
 
     function refreshTabs() {
@@ -683,21 +758,31 @@
     };
 
     searchInput.addEventListener("input", render);
+    themeToggle.addEventListener("click", () => {
+      applyTheme(getNextTheme(currentTheme));
+      if (globalScope.localStorage) {
+        globalScope.localStorage.setItem("tabBusterTheme", currentTheme);
+      }
+    });
     if (globalScope.addEventListener) {
       globalScope.addEventListener("resize", render);
     }
     registerTabChangeListeners(chromeApi, refreshTabs);
+    applyTheme(currentTheme);
     refreshTabs();
   }
 
   const api = {
     createFaviconUrl,
     createGroupCloseConfirmation,
+    CARD_REFLOW_ANIMATION_MS,
     decorateTab,
     filterGroups,
     formatDomainName,
     getBaseDomain,
     getMasonryColumnCount,
+    getReflowOffset,
+    getNextTheme,
     getShortestColumnIndex,
     groupTabsByDomain,
     GROUP_CLOSE_ANIMATION_MS,

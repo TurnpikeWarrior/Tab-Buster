@@ -13,10 +13,24 @@
           <h1>Tab Buster Dashboard</h1>
           <p id="summary" class="summary">Loading tabs...</p>
         </div>
-        <label class="search-box">
-          <span>Search</span>
-          <input id="searchInput" type="search" autocomplete="off" placeholder="Domain, title, or URL">
-        </label>
+        <div class="topbar-actions">
+          <button id="themeToggle" class="theme-toggle" type="button" aria-label="Switch to dark mode" title="Switch to dark mode">
+            <span class="theme-track" aria-hidden="true">
+              <span class="theme-thumb"></span>
+              <svg class="theme-symbol theme-sun" viewBox="0 0 496 496" focusable="false">
+                <path d="M248 88c-88.2 0-160 71.8-160 160s71.8 160 160 160 160-71.8 160-160S336.2 88 248 88Zm0 304c-79.4 0-144-64.6-144-144s64.6-144 144-144 144 64.6 144 144-64.6 144-144 144Z"/>
+                <path d="M240 0h16v72h-16zM240 424h16v72h-16zM0 240h72v16H0zM424 240h72v16h-72zM90.1 62.1l50.9 50.9-11.3 11.3-50.9-50.9zM355 383l11.3-11.3 50.9 50.9-11.3 11.3zM78.8 422.6l50.9-50.9 11.3 11.3-50.9 50.9zM355 113l50.9-50.9 11.3 11.3-50.9 50.9z"/>
+              </svg>
+              <svg class="theme-symbol theme-moon" viewBox="0 0 49.739 49.739" focusable="false">
+                <path d="M25.068 48.889c-9.173 0-18.017-5.06-22.396-13.804C-3.373 23.008 1.164 8.467 13.003 1.979L15.064.85l-.615 2.268c-1.479 5.459-.899 11.25 1.633 16.306 2.75 5.493 7.476 9.587 13.305 11.526 5.831 1.939 12.065 1.492 17.559-1.258l2.795-1.521-.585 2.252c-1.863 6.873-6.577 12.639-12.933 15.822-3.584 1.794-7.398 2.643-11.155 2.644ZM12.002 4.936c-9.413 6.428-12.756 18.837-7.54 29.253 5.678 11.34 19.522 15.945 30.864 10.268 5.154-2.582 9.136-7.012 11.181-12.357-5.632 2.427-11.882 2.702-17.752.748-6.337-2.108-11.473-6.557-14.463-12.528-2.393-4.779-3.182-10.16-2.29-15.384Z"/>
+              </svg>
+            </span>
+          </button>
+          <label class="search-box">
+            <span>Search</span>
+            <input id="searchInput" type="search" autocomplete="off" placeholder="Domain, title, or URL">
+          </label>
+        </div>
       </header>
 
       <div id="status" class="status" role="status" aria-live="polite"></div>

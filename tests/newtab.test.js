@@ -9,12 +9,15 @@ const {
   formatDomainName,
   getBaseDomain,
   getMasonryColumnCount,
+  getReflowOffset,
   getShortestColumnIndex,
   groupTabsByDomain,
   normalizeTabUrl,
   organizeTabsByDuplicateUrl,
   registerTabChangeListeners,
+  getNextTheme,
   GROUP_CLOSE_ANIMATION_MS,
+  CARD_REFLOW_ANIMATION_MS,
   TAB_CLOSE_ANIMATION_MS,
 } = require("../newtab.js");
 
@@ -91,6 +94,22 @@ test("tab close animation is quick but gives rows time to collapse", () => {
 test("group close burst animation is quick but visible", () => {
   assert.ok(GROUP_CLOSE_ANIMATION_MS >= 350);
   assert.ok(GROUP_CLOSE_ANIMATION_MS <= 700);
+});
+
+test("card reflow animation is quick and calculates movement from old to new position", () => {
+  assert.ok(CARD_REFLOW_ANIMATION_MS >= 250);
+  assert.ok(CARD_REFLOW_ANIMATION_MS <= 500);
+  assert.deepEqual(
+    getReflowOffset({ left: 30, top: 120 }, { left: 10, top: 80 }),
+    { x: 20, y: 40 },
+  );
+  assert.equal(getReflowOffset({ left: 10, top: 80 }, { left: 10, top: 80 }), null);
+});
+
+test("getNextTheme toggles between light and dark", () => {
+  assert.equal(getNextTheme("light"), "dark");
+  assert.equal(getNextTheme("dark"), "light");
+  assert.equal(getNextTheme("unexpected"), "dark");
 });
 
 test("createGroupCloseConfirmation supports yes and no confirmation choices", () => {
