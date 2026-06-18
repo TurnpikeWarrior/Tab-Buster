@@ -1,12 +1,12 @@
-# Tab Buster Dashboard
+# Tab Buster
 
-Chrome extension that replaces the new tab page with a dashboard of all open tabs grouped by friendly domain cards.
+Tab Buster is a Chrome extension that replaces the new tab page with a dashboard of all open tabs grouped by friendly domain cards.
 
 ## Features
 
 - Groups open tabs by domain.
 - Shows friendly domain names such as `YouTube` instead of `youtube.com`.
-- Shows favicons beside domain titles and tab titles.
+- Shows favicons beside tab titles.
 - Always shows every tab title in each domain card.
 - Click a tab title to jump to the existing tab.
 - Close a specific tab from its row.
@@ -24,7 +24,7 @@ Chrome extension that replaces the new tab page with a dashboard of all open tab
 ## Permissions
 
 - `tabs`: reads open tab titles and URLs so the dashboard can group, activate, and close tabs.
-- `favicon`: loads tab favicons through Chrome's internal favicon endpoint instead of remote page-provided favicon URLs.
+- `favicon`: loads tab favicons through Chrome's internal favicon endpoint before using the sanitized favicon fallback described above.
 
 ## Files
 

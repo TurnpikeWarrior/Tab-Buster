@@ -149,14 +149,10 @@
 
     try {
       const parsed = new URL(String(rawUrl));
-      if (parsed.protocol === "http:" || parsed.protocol === "https:" || parsed.protocol === "data:") {
-        return parsed.href;
-      }
+      return parsed.protocol === "http:" || parsed.protocol === "https:" ? parsed.href : "";
     } catch (_error) {
       return "";
     }
-
-    return "";
   }
 
   function normalizeDuplicateUrl(rawUrl) {
@@ -259,6 +255,18 @@
         return tabs.length ? { ...group, tabs } : null;
       })
       .filter(Boolean);
+  }
+
+  function isDashboardVisibleTab(tab, options) {
+    const currentTabId = options && options.currentTabId;
+    const dashboardUrl = (options && options.dashboardUrl) || "";
+    const tabUrl = String((tab && (tab.url || tab.pendingUrl)) || "");
+
+    if (currentTabId && tab && tab.id === currentTabId) return false;
+    if (dashboardUrl && tabUrl === dashboardUrl) return false;
+    if (tabUrl === "chrome://newtab" || tabUrl === "chrome://newtab/") return false;
+
+    return true;
   }
 
   function getMasonryColumnCount(containerWidth) {
@@ -689,10 +697,9 @@
             ? chromeApi.runtime.getURL("newtab.html")
             : "";
 
-          const visibleTabs = (tabs || []).filter((tab) => {
-            if (currentTabId && tab.id === currentTabId) return false;
-            return tab.url !== dashboardUrl;
-          });
+          const visibleTabs = (tabs || []).filter((tab) =>
+            isDashboardVisibleTab(tab, { currentTabId, dashboardUrl }),
+          );
 
           allGroups = groupTabsByDomain(visibleTabs);
           setStatus("");
@@ -786,6 +793,7 @@
     getShortestColumnIndex,
     groupTabsByDomain,
     GROUP_CLOSE_ANIMATION_MS,
+    isDashboardVisibleTab,
     normalizeTabUrl,
     organizeTabsByDuplicateUrl,
     registerTabChangeListeners,

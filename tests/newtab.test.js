@@ -12,9 +12,11 @@ const {
   getReflowOffset,
   getShortestColumnIndex,
   groupTabsByDomain,
+  isDashboardVisibleTab,
   normalizeTabUrl,
   organizeTabsByDuplicateUrl,
   registerTabChangeListeners,
+  sanitizeFaviconFallback,
   getNextTheme,
   GROUP_CLOSE_ANIMATION_MS,
   CARD_REFLOW_ANIMATION_MS,
@@ -71,7 +73,15 @@ test("createFaviconUrl uses Chrome favicon service for tab URLs", () => {
   );
 });
 
-test("decorateTab never uses remote favIconUrl directly", () => {
+test("sanitizeFaviconFallback only allows web favicon URLs", () => {
+  assert.equal(sanitizeFaviconFallback("https://example.com/favicon.ico"), "https://example.com/favicon.ico");
+  assert.equal(sanitizeFaviconFallback("http://example.com/favicon.ico"), "http://example.com/favicon.ico");
+  assert.equal(sanitizeFaviconFallback("javascript:alert(1)"), "");
+  assert.equal(sanitizeFaviconFallback("chrome://favicon"), "");
+  assert.equal(sanitizeFaviconFallback("not a url"), "");
+});
+
+test("decorateTab prefers Chrome favicon service and keeps sanitized remote fallback", () => {
   const tab = decorateTab({
     id: 10,
     title: "Tracked page",
@@ -223,6 +233,25 @@ test("filterGroups matches domain names, tab titles, and URLs", () => {
   assert.deepEqual(
     filterGroups(groups, "openrouter").map((group) => group.displayName),
     ["OpenRouter"],
+  );
+});
+
+test("isDashboardVisibleTab excludes the dashboard tab and Chrome new tab pages", () => {
+  assert.equal(
+    isDashboardVisibleTab({ id: 1, url: "chrome://newtab/" }, { currentTabId: 99, dashboardUrl: "chrome-extension://abc/newtab.html" }),
+    false,
+  );
+  assert.equal(
+    isDashboardVisibleTab({ id: 99, url: "https://example.com" }, { currentTabId: 99, dashboardUrl: "chrome-extension://abc/newtab.html" }),
+    false,
+  );
+  assert.equal(
+    isDashboardVisibleTab({ id: 2, url: "chrome-extension://abc/newtab.html" }, { currentTabId: 99, dashboardUrl: "chrome-extension://abc/newtab.html" }),
+    false,
+  );
+  assert.equal(
+    isDashboardVisibleTab({ id: 3, url: "https://example.com" }, { currentTabId: 99, dashboardUrl: "chrome-extension://abc/newtab.html" }),
+    true,
   );
 });
 
