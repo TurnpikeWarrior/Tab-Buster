@@ -23,6 +23,17 @@
           <span>Search</span>
           <input id="searchInput" type="search" autocomplete="off" placeholder="Domain, title, or URL">
         </label>
+        <fieldset class="group-mode" aria-label="Group tabs by">
+          <legend>Group by</legend>
+          <label>
+            <input id="groupModeDomain" type="radio" name="groupMode" value="domain" checked>
+            <span>Domain</span>
+          </label>
+          <label>
+            <input id="groupModeWindow" type="radio" name="groupMode" value="window">
+            <span>Window</span>
+          </label>
+        </fieldset>
         <button id="themeToggle" class="theme-toggle" type="button" aria-label="Switch to dark mode" title="Switch to dark mode">
           <span class="theme-track" aria-hidden="true">
             <span class="theme-thumb"></span>

@@ -23,6 +23,8 @@ const {
   shortUrl,
   getNextTheme,
   GROUP_CLOSE_ANIMATION_MS,
+  groupTabsByWindow,
+  getGroupModeSummaryLabel,
   CARD_REFLOW_ANIMATION_MS,
   TAB_CLOSE_ANIMATION_MS,
 } = require("../newtab.js");
@@ -225,6 +227,58 @@ test("groupTabsByDomain groups tabs, sorts by count then name, and keeps tab ord
   );
 });
 
+test("groupTabsByWindow groups tabs by Chrome window and sorts by count then window label", () => {
+  const groups = groupTabsByWindow([
+    { id: 1, windowId: 20, title: "Repo", url: "https://github.com/org/repo" },
+    { id: 2, windowId: 10, title: "Video", url: "https://youtube.com/watch?v=abc" },
+    { id: 3, windowId: 10, title: "Docs", url: "https://docs.google.com/document/d/123" },
+    { id: 4, windowId: 30, title: "Mail", url: "https://mail.google.com/mail/u/0/" },
+  ]);
+
+  assert.deepEqual(
+    groups.map((group) => [group.key, group.displayName, group.domain, group.tabs.length]),
+    [
+      ["window-10", "Window 1", "Window 1", 2],
+      ["window-20", "Window 2", "Window 2", 1],
+      ["window-30", "Window 3", "Window 3", 1],
+    ],
+  );
+  assert.deepEqual(
+    groups[0].tabs.map((tab) => [tab.title, tab.displayDomain]),
+    [
+      ["Video", "YouTube"],
+      ["Docs", "Google"],
+    ],
+  );
+});
+
+test("window grouping keeps duplicate links together inside each window card", () => {
+  const groups = groupTabsByWindow([
+    { id: 1, windowId: 10, title: "Repo", url: "https://github.com/org/repo" },
+    { id: 2, windowId: 10, title: "Repo copy", url: "https://github.com/org/repo" },
+    { id: 3, windowId: 11, title: "Repo other window", url: "https://github.com/org/repo" },
+  ]);
+
+  assert.deepEqual(
+    groups[0].tabs.map((tab) => [tab.title, tab.isDuplicateLink, tab.duplicateCount]),
+    [
+      ["Repo", true, 2],
+      ["Repo copy", true, 2],
+    ],
+  );
+  assert.deepEqual(
+    groups[1].tabs.map((tab) => [tab.title, tab.isDuplicateLink, tab.duplicateCount]),
+    [["Repo other window", false, 1]],
+  );
+});
+
+test("getGroupModeSummaryLabel names domain and window group counts", () => {
+  assert.equal(getGroupModeSummaryLabel("domain", 1), "domain");
+  assert.equal(getGroupModeSummaryLabel("domain", 2), "domains");
+  assert.equal(getGroupModeSummaryLabel("window", 1), "window");
+  assert.equal(getGroupModeSummaryLabel("window", 3), "windows");
+});
+
 test("groupTabsByDomain groups subdomains by their main domain", () => {
   const groups = groupTabsByDomain([
     { id: 1, title: "Repo", url: "https://github.com/org/repo" },
@@ -299,6 +353,18 @@ test("header centers search and keeps theme toggle on the right", () => {
   assert.match(searchRule[0], /justify-self:\s*center/);
   assert.match(themeToggleRule[0], /grid-column:\s*3/);
   assert.match(themeToggleRule[0], /justify-self:\s*end/);
+});
+
+test("new tab page exposes a group-by control for domain and window views", () => {
+  const html = fs.readFileSync(path.join(__dirname, "../newtab.html"), "utf8");
+  const css = fs.readFileSync(path.join(__dirname, "../newtab.css"), "utf8");
+
+  assert.match(html, /id="groupModeDomain"/);
+  assert.match(html, /id="groupModeWindow"/);
+  assert.match(html, /name="groupMode"/);
+  assert.match(html, /value="domain"/);
+  assert.match(html, /value="window"/);
+  assert.match(css, /\.group-mode/);
 });
 
 test("getShortestColumnIndex picks the highest open spot and breaks ties from the left", () => {
