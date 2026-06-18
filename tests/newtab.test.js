@@ -17,6 +17,7 @@ const {
   organizeTabsByDuplicateUrl,
   registerTabChangeListeners,
   sanitizeFaviconFallback,
+  shortUrl,
   getNextTheme,
   GROUP_CLOSE_ANIMATION_MS,
   CARD_REFLOW_ANIMATION_MS,
@@ -53,6 +54,11 @@ test("getBaseDomain ignores subdomains without collapsing common multi-part suff
   assert.equal(getBaseDomain("gist.github.com"), "github.com");
   assert.equal(getBaseDomain("www.youtube.com"), "youtube.com");
   assert.equal(getBaseDomain("news.bbc.co.uk"), "bbc.co.uk");
+});
+
+test("shortUrl keeps localhost port numbers visible", () => {
+  assert.equal(shortUrl("http://localhost:3000/dashboard"), "localhost:3000/dashboard");
+  assert.equal(shortUrl("http://127.0.0.1:5173/"), "127.0.0.1:5173");
 });
 
 test("normalizeTabUrl groups subdomains by their main domain", () => {

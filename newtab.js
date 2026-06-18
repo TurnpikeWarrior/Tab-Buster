@@ -310,7 +310,7 @@
     try {
       const parsed = new URL(url);
       if (parsed.protocol === "chrome:") return parsed.href.replace(/\/$/, "");
-      return `${parsed.hostname.replace(/^www\./, "")}${parsed.pathname === "/" ? "" : parsed.pathname}`;
+      return `${parsed.host.replace(/^www\./, "")}${parsed.pathname === "/" ? "" : parsed.pathname}`;
     } catch (_error) {
       return String(url);
     }
