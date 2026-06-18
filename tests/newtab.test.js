@@ -1,5 +1,7 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
+const fs = require("node:fs");
+const path = require("node:path");
 
 const {
   createFaviconUrl,
@@ -270,6 +272,33 @@ test("getMasonryColumnCount matches the responsive card width", () => {
   assert.equal(getMasonryColumnCount(320), 1);
   assert.equal(getMasonryColumnCount(760), 2);
   assert.equal(getMasonryColumnCount(1500), 4);
+  assert.equal(getMasonryColumnCount(2100), 5);
+});
+
+test("dashboard shell can expand past the old four-column width cap", () => {
+  const css = fs.readFileSync(path.join(__dirname, "../newtab.css"), "utf8");
+  const appShellRule = css.match(/\.app-shell\s*\{[^}]+\}/);
+
+  assert.ok(appShellRule, "Expected .app-shell rule to exist");
+  assert.doesNotMatch(appShellRule[0], /1680px/);
+  assert.match(appShellRule[0], /width:\s*calc\(100%\s*-\s*100px\)/);
+});
+
+test("header centers search and keeps theme toggle on the right", () => {
+  const css = fs.readFileSync(path.join(__dirname, "../newtab.css"), "utf8");
+  const topbarRule = css.match(/\.topbar\s*\{[^}]+\}/);
+  const searchRule = css.match(/\.search-box\s*\{[^}]+\}/);
+  const themeToggleRule = css.match(/\.theme-toggle\s*\{[^}]+\}/);
+
+  assert.ok(topbarRule, "Expected .topbar rule to exist");
+  assert.ok(searchRule, "Expected .search-box rule to exist");
+  assert.ok(themeToggleRule, "Expected .theme-toggle rule to exist");
+  assert.match(topbarRule[0], /display:\s*grid/);
+  assert.match(topbarRule[0], /grid-template-columns:\s*minmax\(0,\s*1fr\)\s+minmax\(320px,\s*420px\)\s+minmax\(0,\s*1fr\)/);
+  assert.match(searchRule[0], /grid-column:\s*2/);
+  assert.match(searchRule[0], /justify-self:\s*center/);
+  assert.match(themeToggleRule[0], /grid-column:\s*3/);
+  assert.match(themeToggleRule[0], /justify-self:\s*end/);
 });
 
 test("getShortestColumnIndex picks the highest open spot and breaks ties from the left", () => {
