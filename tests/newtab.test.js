@@ -3,6 +3,7 @@ const assert = require("node:assert/strict");
 
 const {
   createFaviconUrl,
+  createGroupCloseConfirmation,
   decorateTab,
   filterGroups,
   formatDomainName,
@@ -11,6 +12,9 @@ const {
   getShortestColumnIndex,
   groupTabsByDomain,
   normalizeTabUrl,
+  organizeTabsByDuplicateUrl,
+  registerTabChangeListeners,
+  GROUP_CLOSE_ANIMATION_MS,
   TAB_CLOSE_ANIMATION_MS,
 } = require("../newtab.js");
 
@@ -76,11 +80,32 @@ test("decorateTab never uses remote favIconUrl directly", () => {
     tab.faviconUrl,
     "/_favicon/?pageUrl=https%3A%2F%2Fexample.com%2Fpage&size=32",
   );
+  assert.equal(tab.faviconFallbackUrl, "https://tracker.example/favicon.ico");
 });
 
 test("tab close animation is quick but gives rows time to collapse", () => {
   assert.ok(TAB_CLOSE_ANIMATION_MS >= 300);
   assert.ok(TAB_CLOSE_ANIMATION_MS <= 600);
+});
+
+test("group close burst animation is quick but visible", () => {
+  assert.ok(GROUP_CLOSE_ANIMATION_MS >= 350);
+  assert.ok(GROUP_CLOSE_ANIMATION_MS <= 700);
+});
+
+test("createGroupCloseConfirmation supports yes and no confirmation choices", () => {
+  const confirmation = createGroupCloseConfirmation();
+
+  assert.equal(confirmation.isConfirming(), false);
+  assert.equal(confirmation.confirmClose(), false);
+  confirmation.requestConfirmation();
+  assert.equal(confirmation.isConfirming(), true);
+  assert.equal(confirmation.confirmClose(), true);
+  assert.equal(confirmation.isConfirming(), false);
+
+  confirmation.requestConfirmation();
+  confirmation.cancel();
+  assert.equal(confirmation.isConfirming(), false);
 });
 
 test("groupTabsByDomain groups tabs, sorts by count then name, and keeps tab order", () => {
@@ -125,6 +150,31 @@ test("groupTabsByDomain groups subdomains by their main domain", () => {
   );
 });
 
+test("organizeTabsByDuplicateUrl places duplicate links together and marks them", () => {
+  const tabs = [
+    { id: 1, title: "Video A", url: "https://youtube.com/watch?v=a" },
+    { id: 2, title: "Video B", url: "https://youtube.com/watch?v=b" },
+    { id: 3, title: "Video A copy", url: "https://youtube.com/watch?v=a" },
+    { id: 4, title: "Video C", url: "https://youtube.com/watch?v=c" },
+  ];
+
+  const organized = organizeTabsByDuplicateUrl(tabs);
+
+  assert.deepEqual(
+    organized.map((tab) => tab.title),
+    ["Video A", "Video A copy", "Video B", "Video C"],
+  );
+  assert.deepEqual(
+    organized.map((tab) => [tab.title, tab.isDuplicateLink, tab.duplicateCount]),
+    [
+      ["Video A", true, 2],
+      ["Video A copy", true, 2],
+      ["Video B", false, 1],
+      ["Video C", false, 1],
+    ],
+  );
+});
+
 test("getMasonryColumnCount matches the responsive card width", () => {
   assert.equal(getMasonryColumnCount(320), 1);
   assert.equal(getMasonryColumnCount(760), 2);
@@ -155,4 +205,36 @@ test("filterGroups matches domain names, tab titles, and URLs", () => {
     filterGroups(groups, "openrouter").map((group) => group.displayName),
     ["OpenRouter"],
   );
+});
+
+test("registerTabChangeListeners refreshes when Chrome tab events fire", () => {
+  const events = {};
+  const chromeApi = {
+    tabs: {
+      onCreated: { addListener: (listener) => { events.created = listener; } },
+      onRemoved: { addListener: (listener) => { events.removed = listener; } },
+      onReplaced: { addListener: (listener) => { events.replaced = listener; } },
+      onUpdated: { addListener: (listener) => { events.updated = listener; } },
+    },
+  };
+  let refreshCount = 0;
+
+  registerTabChangeListeners(chromeApi, () => {
+    refreshCount += 1;
+  });
+
+  assert.equal(typeof events.removed, "function");
+  assert.equal(typeof events.created, "function");
+  assert.equal(typeof events.updated, "function");
+  assert.equal(typeof events.replaced, "function");
+
+  events.removed();
+  events.created();
+  events.updated(1, { status: "complete" });
+  events.updated(1, { title: "New title" });
+  events.updated(1, { favIconUrl: "https://example.com/favicon.ico" });
+  events.updated(1, { audible: true });
+  events.replaced();
+
+  assert.equal(refreshCount, 6);
 });

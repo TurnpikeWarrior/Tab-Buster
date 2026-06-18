@@ -35,8 +35,11 @@
   ]);
 
   const TAB_CLOSE_ANIMATION_MS = 420;
+  const GROUP_CLOSE_ANIMATION_MS = 520;
   const MASONRY_MIN_COLUMN_WIDTH = 360;
   const MASONRY_COLUMN_GAP = 14;
+  const CLOSE_GROUP_LABEL = "Close group";
+  const CLOSE_GROUP_CONFIRM_LABEL = "Are you sure?";
 
   function titleCaseToken(token) {
     if (!token) return "";
@@ -140,6 +143,61 @@
     return `${faviconBase}?pageUrl=${encodeURIComponent(pageUrl)}&size=32`;
   }
 
+  function sanitizeFaviconFallback(rawUrl) {
+    if (!rawUrl) return "";
+
+    try {
+      const parsed = new URL(String(rawUrl));
+      if (parsed.protocol === "http:" || parsed.protocol === "https:" || parsed.protocol === "data:") {
+        return parsed.href;
+      }
+    } catch (_error) {
+      return "";
+    }
+
+    return "";
+  }
+
+  function normalizeDuplicateUrl(rawUrl) {
+    const urlText = String(rawUrl || "").trim();
+    if (!urlText) return "";
+
+    try {
+      const parsed = new URL(urlText);
+      parsed.protocol = parsed.protocol.toLowerCase();
+      parsed.hostname = parsed.hostname.toLowerCase();
+      return parsed.href;
+    } catch (_error) {
+      return urlText;
+    }
+  }
+
+  function organizeTabsByDuplicateUrl(tabs) {
+    const buckets = new Map();
+    const orderedKeys = [];
+
+    for (const tab of tabs || []) {
+      const key = normalizeDuplicateUrl(tab.url || tab.pendingUrl || "");
+      if (!buckets.has(key)) {
+        buckets.set(key, []);
+        orderedKeys.push(key);
+      }
+
+      buckets.get(key).push(tab);
+    }
+
+    return orderedKeys.flatMap((key) => {
+      const bucket = buckets.get(key);
+      const duplicateCount = bucket.length;
+
+      return bucket.map((tab) => ({
+        ...tab,
+        duplicateCount,
+        isDuplicateLink: duplicateCount > 1,
+      }));
+    });
+  }
+
   function decorateTab(tab) {
     const normalized = normalizeTabUrl(tab.url || tab.pendingUrl || "");
 
@@ -149,6 +207,7 @@
       displayDomain: normalized.displayName,
       normalizedHost: normalized.host,
       faviconUrl: createFaviconUrl(normalized.faviconSourceUrl),
+      faviconFallbackUrl: sanitizeFaviconFallback(tab.favIconUrl),
     };
   }
 
@@ -171,7 +230,10 @@
       groupsByKey.get(key).tabs.push(decoratedTab);
     }
 
-    return Array.from(groupsByKey.values()).sort((a, b) => {
+    return Array.from(groupsByKey.values()).map((group) => ({
+      ...group,
+      tabs: organizeTabsByDuplicateUrl(group.tabs),
+    })).sort((a, b) => {
       if (b.tabs.length !== a.tabs.length) return b.tabs.length - a.tabs.length;
       return a.displayName.localeCompare(b.displayName);
     });
@@ -231,7 +293,7 @@
     element.textContent = text == null ? "" : String(text);
   }
 
-  function createImage(src, className) {
+  function createImage(src, className, fallbackSrc) {
     const image = document.createElement("img");
     image.className = className;
     image.alt = "";
@@ -239,6 +301,11 @@
     image.referrerPolicy = "no-referrer";
     if (src) image.src = src;
     image.addEventListener("error", () => {
+      if (fallbackSrc && image.src !== fallbackSrc) {
+        image.src = fallbackSrc;
+        return;
+      }
+
       image.style.visibility = "hidden";
     });
     return image;
@@ -254,6 +321,27 @@
     return button;
   }
 
+  function createGroupCloseConfirmation() {
+    let isConfirmingClose = false;
+
+    return {
+      isConfirming() {
+        return isConfirmingClose;
+      },
+      requestConfirmation() {
+        isConfirmingClose = true;
+      },
+      confirmClose() {
+        if (!isConfirmingClose) return false;
+        isConfirmingClose = false;
+        return true;
+      },
+      cancel() {
+        isConfirmingClose = false;
+      },
+    };
+  }
+
   function getCloseAnimationMs() {
     if (
       globalScope.matchMedia &&
@@ -263,6 +351,30 @@
     }
 
     return TAB_CLOSE_ANIMATION_MS;
+  }
+
+  function getGroupCloseAnimationMs() {
+    if (
+      globalScope.matchMedia &&
+      globalScope.matchMedia("(prefers-reduced-motion: reduce)").matches
+    ) {
+      return 0;
+    }
+
+    return GROUP_CLOSE_ANIMATION_MS;
+  }
+
+  function closeGroupWithAnimation(card, action) {
+    if (card.classList.contains("is-group-closing")) return;
+
+    card.classList.add("is-group-closing");
+    const animationMs = getGroupCloseAnimationMs();
+    if (animationMs === 0) {
+      action();
+      return;
+    }
+
+    globalScope.setTimeout(action, animationMs);
   }
 
   function closeTabWithAnimation(row, closeButton, closeAction) {
@@ -283,9 +395,12 @@
 
   function createTabRow(tab, actions) {
     const row = document.createElement("article");
-    row.className = "tab-row";
+    row.className = tab.isDuplicateLink ? "tab-row is-duplicate" : "tab-row";
+    if (tab.isDuplicateLink) {
+      row.title = `${tab.duplicateCount} duplicate tabs with this link`;
+    }
 
-    row.append(createImage(tab.faviconUrl, "favicon tab-favicon"));
+    row.append(createImage(tab.faviconUrl, "favicon tab-favicon", tab.faviconFallbackUrl));
 
     const linkButton = createButton("tab-link", "", `Jump to ${tab.title || "tab"}`);
     const title = document.createElement("span");
@@ -320,13 +435,53 @@
     const title = document.createElement("strong");
     setText(title, group.displayName);
     const meta = document.createElement("span");
-    setText(meta, `${group.tabs.length} ${group.tabs.length === 1 ? "tab" : "tabs"} · ${group.domain}`);
+    setText(meta, `${group.tabs.length} ${group.tabs.length === 1 ? "tab" : "tabs"}`);
     titleWrap.append(title, meta);
 
-    const closeGroup = createButton("close-group", "Close group", `Close all ${group.displayName} tabs`);
-    closeGroup.addEventListener("click", () => actions.closeGroup(group));
+    const closeGroup = createButton("close-group", CLOSE_GROUP_LABEL, `Close all ${group.displayName} tabs`);
+    const closeConfirmation = createGroupCloseConfirmation();
+    const confirmWrap = document.createElement("span");
+    confirmWrap.className = "close-group-confirmation";
+    confirmWrap.hidden = true;
 
-    header.append(titleWrap, closeGroup);
+    const confirmText = document.createElement("span");
+    confirmText.className = "confirm-copy";
+    setText(confirmText, CLOSE_GROUP_CONFIRM_LABEL);
+
+    const confirmYes = createButton("confirm-choice confirm-yes", "Y", `Yes, close all ${group.displayName} tabs`);
+    const confirmNo = createButton("confirm-choice confirm-no", "N", `No, keep ${group.displayName} tabs`);
+    confirmWrap.append(confirmText, confirmYes, confirmNo);
+
+    function showCloseConfirmation() {
+      closeConfirmation.requestConfirmation();
+      closeGroup.hidden = true;
+      confirmWrap.hidden = false;
+      confirmYes.focus();
+    }
+
+    function hideCloseConfirmation() {
+      closeConfirmation.cancel();
+      confirmWrap.hidden = true;
+      closeGroup.hidden = false;
+    }
+
+    closeGroup.addEventListener("click", () => {
+      showCloseConfirmation();
+    });
+
+    confirmYes.addEventListener("click", () => {
+      if (!closeConfirmation.confirmClose()) return;
+      confirmYes.disabled = true;
+      confirmNo.disabled = true;
+      closeGroupWithAnimation(card, () => actions.closeGroup(group));
+    });
+
+    confirmNo.addEventListener("click", () => {
+      hideCloseConfirmation();
+      closeGroup.focus();
+    });
+
+    header.append(titleWrap, closeGroup, confirmWrap);
 
     const list = document.createElement("div");
     list.className = "tab-list";
@@ -372,6 +527,31 @@
     for (const column of columns) {
       if (!column.children.length) column.remove();
     }
+  }
+
+  function addChromeListener(event, listener) {
+    if (event && event.addListener) event.addListener(listener);
+  }
+
+  function registerTabChangeListeners(chromeApi, refreshTabs) {
+    if (!chromeApi || !chromeApi.tabs) return;
+
+    addChromeListener(chromeApi.tabs.onCreated, refreshTabs);
+    addChromeListener(chromeApi.tabs.onRemoved, refreshTabs);
+    addChromeListener(chromeApi.tabs.onReplaced, refreshTabs);
+    addChromeListener(chromeApi.tabs.onUpdated, (_tabId, changeInfo) => {
+      if (
+        changeInfo &&
+        !changeInfo.url &&
+        !changeInfo.title &&
+        !changeInfo.favIconUrl &&
+        changeInfo.status !== "complete"
+      ) {
+        return;
+      }
+
+      refreshTabs();
+    });
   }
 
   function initializeChromeDashboard() {
@@ -481,12 +661,6 @@
     }
 
     function closeGroup(group) {
-      const confirmed = globalScope.confirm(
-        `Close all ${group.tabs.length} ${group.tabs.length === 1 ? "tab" : "tabs"} in ${group.displayName}?`,
-      );
-
-      if (!confirmed) return;
-
       chromeApi.tabs.remove(
         group.tabs.map((tab) => tab.id),
         () => {
@@ -512,11 +686,13 @@
     if (globalScope.addEventListener) {
       globalScope.addEventListener("resize", render);
     }
+    registerTabChangeListeners(chromeApi, refreshTabs);
     refreshTabs();
   }
 
   const api = {
     createFaviconUrl,
+    createGroupCloseConfirmation,
     decorateTab,
     filterGroups,
     formatDomainName,
@@ -524,7 +700,11 @@
     getMasonryColumnCount,
     getShortestColumnIndex,
     groupTabsByDomain,
+    GROUP_CLOSE_ANIMATION_MS,
     normalizeTabUrl,
+    organizeTabsByDuplicateUrl,
+    registerTabChangeListeners,
+    sanitizeFaviconFallback,
     shortUrl,
     TAB_CLOSE_ANIMATION_MS,
   };
