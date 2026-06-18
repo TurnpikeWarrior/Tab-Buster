@@ -1,0 +1,10 @@
+{
+  "manifest_version": 3,
+  "name": "Tab Domain Dashboard",
+  "version": "0.1.0",
+  "description": "Replace the new tab page with a dashboard of open tabs grouped by friendly domain cards.",
+  "permissions": ["tabs"],
+  "chrome_url_overrides": {
+    "newtab": "newtab.html"
+  }
+}

@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Open Tabs</title>
+    <link rel="stylesheet" href="newtab.css">
+  </head>
+  <body>
+    <main class="app-shell">
+      <header class="topbar">
+        <div>
+          <h1>Open Tabs</h1>
+          <p id="summary" class="summary">Loading tabs...</p>
+        </div>
+        <label class="search-box">
+          <span>Search</span>
+          <input id="searchInput" type="search" autocomplete="off" placeholder="Domain, title, or URL">
+        </label>
+      </header>
+
+      <div id="status" class="status" role="status" aria-live="polite"></div>
+      <section id="domainGrid" class="domain-grid" aria-label="Tabs grouped by domain"></section>
+      <section id="emptyState" class="empty-state" hidden>
+        <h2>No matching tabs</h2>
+        <p>Try a different domain, title, or URL.</p>
+      </section>
+    </main>
+
+    <script src="newtab.js"></script>
+  </body>
+</html>
