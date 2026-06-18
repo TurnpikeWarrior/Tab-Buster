@@ -3,7 +3,7 @@
   "name": "Tab Domain Dashboard",
   "version": "0.1.0",
   "description": "Replace the new tab page with a dashboard of open tabs grouped by friendly domain cards.",
-  "permissions": ["tabs"],
+  "permissions": ["tabs", "favicon"],
   "chrome_url_overrides": {
     "newtab": "newtab.html"
   }

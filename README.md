@@ -21,6 +21,11 @@ Chrome extension that replaces the new tab page with a dashboard of all open tab
 4. Select the cloned `Tab-Buster` repository folder.
 5. Open a new tab.
 
+## Permissions
+
+- `tabs`: reads open tab titles and URLs so the dashboard can group, activate, and close tabs.
+- `favicon`: loads tab favicons through Chrome's internal favicon endpoint instead of remote page-provided favicon URLs.
+
 ## Files
 
 - `manifest.json`: Manifest V3 extension config and new-tab override.

@@ -24,6 +24,20 @@
     ["chrome://bookmarks", "Chrome Bookmarks"],
   ]);
 
+  const MULTI_PART_PUBLIC_SUFFIXES = new Set([
+    "co.uk",
+    "com.au",
+    "com.br",
+    "com.mx",
+    "co.jp",
+    "co.nz",
+    "co.kr",
+  ]);
+
+  const TAB_CLOSE_ANIMATION_MS = 420;
+  const MASONRY_MIN_COLUMN_WIDTH = 360;
+  const MASONRY_COLUMN_GAP = 14;
+
   function titleCaseToken(token) {
     if (!token) return "";
     const lower = token.toLowerCase();
@@ -55,6 +69,21 @@
     return titleCaseToken(significant || host);
   }
 
+  function getBaseDomain(hostname) {
+    const host = String(hostname || "").trim().toLowerCase().replace(/^www\./, "").replace(/\.$/, "");
+    const labels = host.split(".").filter(Boolean);
+
+    if (labels.length <= 2) return host || "other";
+    if (labels.every((label) => /^\d+$/.test(label))) return host;
+
+    const publicSuffix = labels.slice(-2).join(".");
+    if (MULTI_PART_PUBLIC_SUFFIXES.has(publicSuffix) && labels.length >= 3) {
+      return labels.slice(-3).join(".");
+    }
+
+    return labels.slice(-2).join(".");
+  }
+
   function normalizeTabUrl(rawUrl) {
     if (!rawUrl) {
       return {
@@ -82,7 +111,7 @@
 
     try {
       const parsed = new URL(urlText);
-      const host = parsed.hostname.replace(/^www\./, "").toLowerCase();
+      const host = getBaseDomain(parsed.hostname);
 
       return {
         groupKey: host || "other",
@@ -104,7 +133,11 @@
 
   function createFaviconUrl(pageUrl) {
     if (!pageUrl) return "";
-    return `chrome://favicon2/?size=32&scaleFactor=1x&pageUrl=${encodeURIComponent(pageUrl)}`;
+    const faviconBase =
+      globalScope.chrome && globalScope.chrome.runtime && globalScope.chrome.runtime.getURL
+        ? globalScope.chrome.runtime.getURL("/_favicon/")
+        : "/_favicon/";
+    return `${faviconBase}?pageUrl=${encodeURIComponent(pageUrl)}&size=32`;
   }
 
   function decorateTab(tab) {
@@ -131,7 +164,6 @@
           key,
           domain: decoratedTab.normalizedHost,
           displayName: decoratedTab.displayDomain,
-          faviconUrl: decoratedTab.faviconUrl,
           tabs: [],
         });
       }
@@ -164,6 +196,24 @@
         return tabs.length ? { ...group, tabs } : null;
       })
       .filter(Boolean);
+  }
+
+  function getMasonryColumnCount(containerWidth) {
+    const width = Number(containerWidth) || 0;
+    if (width <= MASONRY_MIN_COLUMN_WIDTH) return 1;
+
+    return Math.max(
+      1,
+      Math.floor((width + MASONRY_COLUMN_GAP) / (MASONRY_MIN_COLUMN_WIDTH + MASONRY_COLUMN_GAP)),
+    );
+  }
+
+  function getShortestColumnIndex(columnHeights) {
+    return columnHeights.reduce(
+      (shortestIndex, height, columnIndex) =>
+        height < columnHeights[shortestIndex] ? columnIndex : shortestIndex,
+      0,
+    );
   }
 
   function shortUrl(url) {
@@ -204,6 +254,33 @@
     return button;
   }
 
+  function getCloseAnimationMs() {
+    if (
+      globalScope.matchMedia &&
+      globalScope.matchMedia("(prefers-reduced-motion: reduce)").matches
+    ) {
+      return 0;
+    }
+
+    return TAB_CLOSE_ANIMATION_MS;
+  }
+
+  function closeTabWithAnimation(row, closeButton, closeAction) {
+    if (row.classList.contains("is-closing")) return;
+
+    closeButton.disabled = true;
+    closeButton.setAttribute("aria-disabled", "true");
+    row.classList.add("is-closing");
+
+    const animationMs = getCloseAnimationMs();
+    if (animationMs === 0) {
+      closeAction();
+      return;
+    }
+
+    globalScope.setTimeout(closeAction, animationMs);
+  }
+
   function createTabRow(tab, actions) {
     const row = document.createElement("article");
     row.className = "tab-row";
@@ -225,7 +302,7 @@
     const closeButton = createButton("close-tab", "x", `Close ${tab.title || "tab"}`);
     closeButton.addEventListener("click", (event) => {
       event.stopPropagation();
-      actions.closeTab(tab);
+      closeTabWithAnimation(row, closeButton, () => actions.closeTab(tab));
     });
 
     row.append(linkButton, closeButton);
@@ -238,8 +315,6 @@
 
     const header = document.createElement("header");
     header.className = "domain-header";
-    header.append(createImage(group.faviconUrl, "favicon domain-favicon"));
-
     const titleWrap = document.createElement("div");
     titleWrap.className = "domain-title";
     const title = document.createElement("strong");
@@ -261,6 +336,42 @@
 
     card.append(header, list);
     return card;
+  }
+
+  function createEmptyDomainColumn() {
+    const column = document.createElement("div");
+    column.className = "domain-column";
+    return column;
+  }
+
+  function measureColumnHeight(column) {
+    if (column.getBoundingClientRect) {
+      const rect = column.getBoundingClientRect();
+      if (rect.height) return rect.height;
+    }
+
+    return column.scrollHeight || 0;
+  }
+
+  function renderMasonryColumns(grid, groups, columnCount, actions) {
+    const columns = Array.from({ length: Math.max(1, columnCount) }, createEmptyDomainColumn);
+    grid.replaceChildren(...columns);
+
+    groups.forEach((group, index) => {
+      const card = createDomainCard(group, actions);
+
+      if (index < columns.length) {
+        columns[index].append(card);
+        return;
+      }
+
+      const columnHeights = columns.map(measureColumnHeight);
+      columns[getShortestColumnIndex(columnHeights)].append(card);
+    });
+
+    for (const column of columns) {
+      if (!column.children.length) column.remove();
+    }
   }
 
   function initializeChromeDashboard() {
@@ -290,11 +401,8 @@
     function render() {
       const filteredGroups = filterGroups(allGroups, searchInput.value);
       const visibleTabs = filteredGroups.reduce((count, group) => count + group.tabs.length, 0);
-      grid.replaceChildren();
-
-      for (const group of filteredGroups) {
-        grid.append(createDomainCard(group, actions));
-      }
+      const columnCount = getMasonryColumnCount(grid.clientWidth || globalScope.innerWidth);
+      renderMasonryColumns(grid, filteredGroups, columnCount, actions);
 
       emptyState.hidden = filteredGroups.length > 0;
       setText(
@@ -354,9 +462,7 @@
             return;
           }
 
-          if (currentTabId && currentTabId !== tab.id) {
-            chromeApi.tabs.remove(currentTabId, () => undefined);
-          }
+          setStatus(`Opened ${tab.title || "tab"}.`);
         });
       });
     }
@@ -403,6 +509,9 @@
     };
 
     searchInput.addEventListener("input", render);
+    if (globalScope.addEventListener) {
+      globalScope.addEventListener("resize", render);
+    }
     refreshTabs();
   }
 
@@ -411,9 +520,13 @@
     decorateTab,
     filterGroups,
     formatDomainName,
+    getBaseDomain,
+    getMasonryColumnCount,
+    getShortestColumnIndex,
     groupTabsByDomain,
     normalizeTabUrl,
     shortUrl,
+    TAB_CLOSE_ANIMATION_MS,
   };
 
   if (typeof module !== "undefined" && module.exports) {
