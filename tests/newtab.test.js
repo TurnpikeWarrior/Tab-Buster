@@ -4,6 +4,7 @@ const assert = require("node:assert/strict");
 const {
   createFaviconUrl,
   createGroupCloseConfirmation,
+  createStableRefreshScheduler,
   decorateTab,
   filterGroups,
   formatDomainName,
@@ -105,6 +106,61 @@ test("decorateTab prefers Chrome favicon service and keeps sanitized remote fall
 test("tab close animation is quick but gives rows time to collapse", () => {
   assert.ok(TAB_CLOSE_ANIMATION_MS >= 300);
   assert.ok(TAB_CLOSE_ANIMATION_MS <= 600);
+});
+
+function createFakeEventTarget(options = {}) {
+  const listeners = new Map();
+
+  return {
+    addEventListener(type, listener) {
+      listeners.set(type, listener);
+    },
+    removeEventListener(type, listener) {
+      if (listeners.get(type) === listener) listeners.delete(type);
+    },
+    matches(selector) {
+      return selector === ":hover" ? options.hovered !== false : false;
+    },
+    trigger(type) {
+      const listener = listeners.get(type);
+      if (listener) listener();
+    },
+  };
+}
+
+test("stable cleanup refresh scheduler holds reflow while the cleaned card is hovered", () => {
+  let refreshCount = 0;
+  const windowTarget = createFakeEventTarget();
+  const card = createFakeEventTarget();
+  const scheduler = createStableRefreshScheduler(windowTarget, () => {
+    refreshCount += 1;
+  });
+
+  assert.equal(scheduler.holdWhileCardHovered(card), true);
+  scheduler.requestRefresh();
+
+  assert.equal(refreshCount, 0);
+
+  card.trigger("mouseleave");
+  assert.equal(refreshCount, 1);
+
+  scheduler.requestRefresh();
+  assert.equal(refreshCount, 2);
+});
+
+test("stable cleanup refresh scheduler releases held reflow when the window blurs", () => {
+  let refreshCount = 0;
+  const windowTarget = createFakeEventTarget();
+  const card = createFakeEventTarget();
+  const scheduler = createStableRefreshScheduler(windowTarget, () => {
+    refreshCount += 1;
+  });
+
+  scheduler.holdWhileCardHovered(card);
+  scheduler.requestRefresh();
+  windowTarget.trigger("blur");
+
+  assert.equal(refreshCount, 1);
 });
 
 test("group close burst animation is quick but visible", () => {

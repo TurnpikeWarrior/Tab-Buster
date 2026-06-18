@@ -391,6 +391,84 @@
     return GROUP_CLOSE_ANIMATION_MS;
   }
 
+  function createStableRefreshScheduler(eventScope, refreshAction) {
+    let heldCard = null;
+    let pendingRefresh = false;
+    let removeHoldListeners = null;
+
+    function clearHoldListeners() {
+      if (removeHoldListeners) removeHoldListeners();
+      removeHoldListeners = null;
+    }
+
+    function releaseHold() {
+      clearHoldListeners();
+      heldCard = null;
+
+      if (pendingRefresh) {
+        pendingRefresh = false;
+        refreshAction();
+      }
+    }
+
+    function cancelHold() {
+      clearHoldListeners();
+      heldCard = null;
+      pendingRefresh = false;
+    }
+
+    function holdWhileCardHovered(card) {
+      if (
+        !card ||
+        !card.addEventListener ||
+        !card.matches ||
+        !card.matches(":hover")
+      ) {
+        return false;
+      }
+
+      if (heldCard === card) return true;
+
+      clearHoldListeners();
+      heldCard = card;
+
+      const releaseFromCard = () => releaseHold();
+      const releaseFromWindow = () => releaseHold();
+
+      card.addEventListener("mouseleave", releaseFromCard, { once: true });
+      if (eventScope && eventScope.addEventListener) {
+        eventScope.addEventListener("blur", releaseFromWindow, { once: true });
+      }
+
+      removeHoldListeners = () => {
+        if (card.removeEventListener) {
+          card.removeEventListener("mouseleave", releaseFromCard);
+        }
+        if (eventScope && eventScope.removeEventListener) {
+          eventScope.removeEventListener("blur", releaseFromWindow);
+        }
+      };
+
+      return true;
+    }
+
+    function requestRefresh() {
+      if (heldCard) {
+        pendingRefresh = true;
+        return;
+      }
+
+      refreshAction();
+    }
+
+    return {
+      cancelHold,
+      holdWhileCardHovered,
+      requestRefresh,
+      releaseHold,
+    };
+  }
+
   function closeGroupWithAnimation(card, action) {
     if (card.classList.contains("is-group-closing")) return;
 
@@ -444,7 +522,7 @@
     const closeButton = createButton("close-tab", "x", `Close ${tab.title || "tab"}`);
     closeButton.addEventListener("click", (event) => {
       event.stopPropagation();
-      closeTabWithAnimation(row, closeButton, () => actions.closeTab(tab));
+      closeTabWithAnimation(row, closeButton, () => actions.closeTab(tab, row));
     });
 
     row.append(linkButton, closeButton);
@@ -708,6 +786,8 @@
       });
     }
 
+    const refreshScheduler = createStableRefreshScheduler(globalScope, refreshTabs);
+
     function activateTab(tab) {
       setStatus(`Opening ${tab.title || "tab"}...`);
       chromeApi.windows.update(tab.windowId, { focused: true }, () => {
@@ -729,20 +809,25 @@
       });
     }
 
-    function closeTab(tab) {
+    function closeTab(tab, row) {
+      const card = row && row.closest ? row.closest(".domain-card") : null;
+      refreshScheduler.holdWhileCardHovered(card);
+
       chromeApi.tabs.remove(tab.id, () => {
         const runtimeError = chromeApi.runtime && chromeApi.runtime.lastError;
         if (runtimeError) {
+          refreshScheduler.cancelHold();
           setStatus(runtimeError.message, "error");
           return;
         }
 
         setStatus(`Closed ${tab.title || "tab"}.`);
-        refreshTabs();
+        refreshScheduler.requestRefresh();
       });
     }
 
     function closeGroup(group) {
+      refreshScheduler.cancelHold();
       chromeApi.tabs.remove(
         group.tabs.map((tab) => tab.id),
         () => {
@@ -774,7 +859,7 @@
     if (globalScope.addEventListener) {
       globalScope.addEventListener("resize", render);
     }
-    registerTabChangeListeners(chromeApi, refreshTabs);
+    registerTabChangeListeners(chromeApi, refreshScheduler.requestRefresh);
     applyTheme(currentTheme);
     refreshTabs();
   }
@@ -782,6 +867,7 @@
   const api = {
     createFaviconUrl,
     createGroupCloseConfirmation,
+    createStableRefreshScheduler,
     CARD_REFLOW_ANIMATION_MS,
     decorateTab,
     filterGroups,
