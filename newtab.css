@@ -175,9 +175,22 @@ input {
 
 h1 {
   margin: 0;
-  font-size: 30px;
-  line-height: 1.1;
+  font-size: 42px;
+  line-height: 1;
   letter-spacing: 0;
+}
+
+.brand-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.brand-icon {
+  flex: 0 0 auto;
+  width: 48px;
+  height: 48px;
+  border-radius: 11px;
 }
 
 .summary {

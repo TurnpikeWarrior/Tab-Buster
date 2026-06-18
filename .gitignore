@@ -3,6 +3,8 @@
 .AppleDouble
 .LSOverride
 Icon?
+!icons/
+!icons/**
 ._*
 Thumbs.db
 Desktop.ini

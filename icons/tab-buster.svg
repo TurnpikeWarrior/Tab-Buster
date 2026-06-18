@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128" role="img" aria-label="Tab Buster icon">
+  <rect x="10" y="10" width="108" height="108" rx="27" fill="#172026"/>
+  <rect x="28" y="31" width="72" height="15" rx="7.5" fill="#55c7a7"/>
+  <rect x="28" y="55" width="32" height="43" rx="8" fill="#ffffff"/>
+  <rect x="68" y="55" width="32" height="43" rx="8" fill="#68a9ff"/>
+  <path d="M92 12l6 18 18-8-8 18 14 8-17 4 8 17-17-8-8 18-5-19-19 8 9-18-16-8 19-4-8-17 17 8z" fill="#f6c646"/>
+  <path d="M92 25l3 10 10-4-4 10 8 5-10 2 4 10-10-5-5 10-3-11-11 5 5-10-9-5 11-2-5-10 10 5z" fill="#ffffff"/>
+</svg>

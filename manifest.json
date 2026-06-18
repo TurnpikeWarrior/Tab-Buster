@@ -3,6 +3,11 @@
   "name": "Tab Buster",
   "version": "0.1.0",
   "description": "Replace the new tab page with Tab Buster, a dashboard of open tabs grouped by friendly domain cards.",
+  "icons": {
+    "16": "icons/icon-16.png",
+    "48": "icons/icon-48.png",
+    "128": "icons/icon-128.png"
+  },
   "permissions": ["tabs", "favicon"],
   "chrome_url_overrides": {
     "newtab": "newtab.html"
